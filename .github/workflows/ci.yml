@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          components: clippy, rustfmt
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Test crate boundary policy
+        run: node --test --experimental-test-coverage --test-coverage-lines=80 tests/check-crate-boundaries.test.mjs
+      - name: Check crate boundaries
+        run: node scripts/check-crate-boundaries.mjs
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Test
+        run: cargo test --locked --workspace --all-features
+      - name: Test documentation
+        run: cargo test --locked --doc --workspace --all-features
+      - uses: taiki-e/install-action@48370a0acfa42217193783a6a038a9f63c85ae6a # cargo-audit
+      - name: Audit dependencies
+        run: cargo audit --deny warnings
+
+  windows-arm64-check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: aarch64-pc-windows-msvc
+      - name: Check Windows ARM64 target
+        run: cargo check --locked --workspace --all-targets --all-features --target aarch64-pc-windows-msvc
