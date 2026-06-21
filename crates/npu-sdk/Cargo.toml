@@ -1,0 +1,15 @@
+[package]
+name = "npu-sdk"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+npu-core = { path = "../npu-core" }
+npu-ort = { path = "../npu-ort" }
+npu-qnn = { path = "../npu-qnn" }
+npu-tasks = { path = "../npu-tasks" }
+
+[lints]
+workspace = true
