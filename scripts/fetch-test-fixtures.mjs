@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readFile, mkdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { readFile, lstat, mkdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,7 +16,9 @@ function isSafeRelativePath(value) {
     typeof value === "string" &&
     value.length > 0 &&
     value === value.replaceAll("\\", "/") &&
+    !value.includes(":") &&
     !path.posix.isAbsolute(value) &&
+    !path.win32.isAbsolute(value) &&
     path.posix.normalize(value) === value &&
     !value.split("/").includes("..")
   );
@@ -39,7 +42,9 @@ export function validateCatalog(catalog) {
     if (typeof artifact.id !== "string" || artifact.id.length === 0 || ids.has(artifact.id)) {
       throw new Error("fixture artifact IDs must be non-empty and unique");
     }
-    if (!isSafeRelativePath(artifact.target) || targets.has(artifact.target)) {
+    const normalizedTarget =
+      typeof artifact.target === "string" ? artifact.target.toLowerCase() : artifact.target;
+    if (!isSafeRelativePath(artifact.target) || targets.has(normalizedTarget)) {
       throw new Error(`${artifact.id}: target must be a unique safe relative path`);
     }
     if (!Number.isSafeInteger(artifact.size) || artifact.size < 0) {
@@ -75,13 +80,23 @@ export function validateCatalog(catalog) {
     }
 
     ids.add(artifact.id);
-    targets.add(artifact.target);
+    targets.add(normalizedTarget);
   }
   return catalog;
 }
 
-function sha256(bytes) {
+function sha256Buffer(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+function sha256File(target) {
+  return new Promise((resolve, reject) => {
+    const hash = createHash("sha256");
+    const stream = createReadStream(target);
+    stream.on("error", reject);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
 }
 
 function validateBytes(artifact, bytes) {
@@ -90,20 +105,21 @@ function validateBytes(artifact, bytes) {
       `${artifact.id}: size mismatch (expected ${artifact.size}, received ${bytes.byteLength})`,
     );
   }
-  if (sha256(bytes) !== artifact.sha256) {
+  if (sha256Buffer(bytes) !== artifact.sha256) {
     throw new Error(`${artifact.id}: checksum mismatch`);
   }
 }
 
 async function existingArtifactStatus(artifact, target) {
+  let metadata;
   try {
-    const metadata = await stat(target);
-    if (!metadata.isFile() || metadata.size !== artifact.size) return "checksum mismatch";
-    return sha256(await readFile(target)) === artifact.sha256 ? "ok" : "checksum mismatch";
+    metadata = await lstat(target);
   } catch (error) {
     if (error?.code === "ENOENT") return "missing";
     throw error;
   }
+  if (!metadata.isFile() || metadata.size !== artifact.size) return "checksum mismatch";
+  return (await sha256File(target)) === artifact.sha256 ? "ok" : "checksum mismatch";
 }
 
 async function containedTarget(root, relativeTarget) {
@@ -114,15 +130,26 @@ async function containedTarget(root, relativeTarget) {
     throw new Error("fixture root resolves through a symlink");
   }
 
-  const target = path.join(resolvedRoot, ...relativeTarget.split("/"));
-  const parent = path.dirname(target);
-  await mkdir(parent, { recursive: true });
-  const realParent = await realpath(parent);
-  const relativeParent = path.relative(realRoot, realParent);
-  if (relativeParent === ".." || relativeParent.startsWith(`..${path.sep}`)) {
-    throw new Error(`${relativeTarget}: parent directory escapes fixture root`);
+  const segments = relativeTarget.split("/");
+  const fileName = segments.pop();
+  let current = realRoot;
+  for (const segment of segments) {
+    const next = path.join(current, segment);
+    let stats;
+    try {
+      stats = await lstat(next);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      await mkdir(next);
+      current = next;
+      continue;
+    }
+    if (!stats.isDirectory()) {
+      throw new Error(`${relativeTarget}: parent directory escapes fixture root`);
+    }
+    current = next;
   }
-  return path.join(realParent, path.basename(target));
+  return path.join(current, fileName);
 }
 
 async function fetchArtifact(artifact, fetchImpl) {
