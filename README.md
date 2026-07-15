@@ -121,6 +121,7 @@ npu serve [--bind 127.0.0.1:8080]
 - [IDEA.md](docs/IDEA.md) — 背景、プロダクト構想、ユースケース
 - [SPEC.md](docs/SPEC.md) — アーキテクチャ、機能契約、受け入れ基準
 - [TEST_FIXTURES.md](docs/TEST_FIXTURES.md) — Phase 0のCPU/QNN検証artifact、golden data、取得手順
+- [docs/adr/](docs/adr/) — Architecture Decision Record
 
 ## 実装前の主要な未決事項
 
