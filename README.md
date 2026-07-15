@@ -120,13 +120,14 @@ npu serve [--bind 127.0.0.1:8080]
 
 - [IDEA.md](docs/IDEA.md) — 背景、プロダクト構想、ユースケース
 - [SPEC.md](docs/SPEC.md) — アーキテクチャ、機能契約、受け入れ基準
+- [TEST_FIXTURES.md](docs/TEST_FIXTURES.md) — Phase 0のCPU/QNN検証artifact、golden data、取得手順
 
 ## 実装前の主要な未決事項
 
 - ONNX Runtime、QNN SDK、QNN backendの対応バージョン
 - Runtime DLLの配布方法とライセンス条件
 - Rust bindingを利用するか、最小C API wrapperを実装するか
-- QNN基準モデルと量子化形式
+- QNN基準fixtureのWindows ARM64実機qualification
 - ONNX Runtime実行のtimeout/cancel挙動
 
 これらはPhase 0の技術検証とArchitecture Decision Recordで確定します。

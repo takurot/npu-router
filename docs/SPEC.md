@@ -894,7 +894,7 @@ Gate: sample modelで再現可能なセットアップ手順と測定結果を�
 | OQ-01 | ONNX Runtime、QNN SDK、backendの固定version | Phase 0開始前 | ABI、機能、配布 |
 | OQ-02 | ORT/QNN DLLを同梱するか、別途導入を要求するか | Phase 0 gate | インストール、ライセンス |
 | OQ-03 | Rust bindingを採用するか、最小C API wrapperを自作するか | Phase 0 gate | unsafe範囲、EP option対応 |
-| OQ-04 | QNN対象の基準modelと量子化形式 | Phase 0開始前 | 技術成立性、性能評価 |
+| OQ-04 | 解決済み: 静的shapeのuint8 QDQを基準とする（`docs/TEST_FIXTURES.md`） | Phase 0開始前 | 技術成立性、性能評価 |
 | OQ-05 | QNN実行timeout/cancelの実挙動 | Phase 0 gate | worker隔離、回復性 |
 | OQ-06 | 同一Sessionの安全な並行`Run`可否と推奨concurrency | Phase 0 gate | throughput、locking |
 | OQ-07 | HTTPでEmbedding raw tensor入力を許可するか | Phase 3開始前 | API、入力上限 |
