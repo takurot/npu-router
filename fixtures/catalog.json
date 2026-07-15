@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "artifacts": [
+    {
+      "id": "tiny-classification-mnist-12",
+      "target": "classification/mnist-12.tar.gz",
+      "size": 26741,
+      "sha256": "a53a59dcaca8804a0f6dfda9a3cf2e082979589391dbde73640b60684f1d24e9",
+      "source": {
+        "url": "https://media.githubusercontent.com/media/onnx/models/c32b9776d06d2ebc7888d705e3a558f62b20e7a8/validated/vision/classification/mnist/model/mnist-12.tar.gz"
+      }
+    },
+    {
+      "id": "qnn-static-uint8-qdq-conv",
+      "target": "qnn/qdq-conv.onnx",
+      "size": 631,
+      "sha256": "398abf0cea762e52116956e55358fe74d73fd2497a577071e48dc7e41cf79c50",
+      "source": {
+        "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/a83fc4d58cb48eb68890dd689f94f28288cf2278/onnxruntime/test/testdata/transform/qdq_conv.onnx"
+      }
+    },
+    {
+      "id": "qnn-unsupported-matmul-integer",
+      "target": "qnn/qnn-unsupported-matmul-integer.onnx",
+      "size": 220,
+      "sha256": "de8baf822f7c8f2c449188e93c7c83a23cb03d1d643e86afa5434223aa833888",
+      "source": {
+        "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/a83fc4d58cb48eb68890dd689f94f28288cf2278/onnxruntime/test/testdata/qnn_ep_partial_support.onnx"
+      }
+    },
+    {
+      "id": "qnn-static-uint8-qdq-conv-input",
+      "target": "qnn/golden/input.raw",
+      "size": 25,
+      "sha256": "b729ce724d9a48d3884dbfcbee1d3793d922b29fa9d639e7290af4978263772b",
+      "source": {
+        "base64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGA=="
+      }
+    },
+    {
+      "id": "qnn-static-uint8-qdq-conv-output",
+      "target": "qnn/golden/output.raw",
+      "size": 9,
+      "sha256": "71e232cc415bd8287fbb8bf93937d2bab92359c70ca6694f2804effffffa8c68",
+      "source": {
+        "base64": "////////////"
+      }
+    }
+  ]
+}

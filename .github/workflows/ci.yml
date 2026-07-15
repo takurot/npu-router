@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: 22
       - name: Test crate boundary policy
-        run: node --test --experimental-test-coverage --test-coverage-lines=80 tests/check-crate-boundaries.test.mjs
+        run: node --test --experimental-test-coverage --test-coverage-lines=80 tests/*.test.mjs
       - name: Check crate boundaries
         run: node scripts/check-crate-boundaries.mjs
       - name: Check formatting
