@@ -229,6 +229,7 @@ MVP組込みtaskは`image_classification`、`object_detection`、`embedding`と�
 - registerはmanifestを検証し、管理対象ディレクトリへatomic copyする。
 - Registryはmanifestの絶対パス、モデルファイルSHA-256、更新時刻を保持する。
 - MVPの`register`は実行中プロセスのRegistryとファイルシステムを更新するが、自動loadはしない。
+- 稼働中の別プロセス（例: 起動済みの`npu serve`）は、この`register`を自動的には認識しない。反映にはそのプロセスの再起動（起動時scan）が必要であり、自動rescanは実装しない。詳細と根拠は[ADR-0001](adr/0001-state-ownership.md)を参照。
 
 ### 8.2 ディレクトリ形式
 
@@ -339,6 +340,7 @@ DISABLEDは運用属性であり、loadとinferを拒否する。
 - unload中の新規inferは`NPU021 MODEL_UNLOADING`を返す。
 - 実行中inferは完了を待ってからSessionを破棄する。
 - failed sessionは自動無限再生成しない。明示loadまたは設定された有限回retryのみ許可する。
+- MVPは`reload`を独立したCLI/HTTP操作として公開しない。Session key（10.1）がモデルSHA-256を含むため、ファイル更新後に同じ`load`を呼び直すだけでこの表の`reload`行と同じ効果（新SessionをLOADED後にatomic swap相当）が得られる。到達経路と旧Session keyの解放条件は[ADR-0001](adr/0001-state-ownership.md)を参照。
 
 ## 10. Session Manager
 
@@ -584,6 +586,7 @@ npu serve [--bind 127.0.0.1:8080]
 - 人間向け出力はstderrへ進捗、stdoutへ結果を出す。
 - `--json`はstdoutへ単一JSON documentを出し、ログを混在させない。
 - 終了コードは0=成功、2=入力/設定不正、3=環境不備、4=Provider失敗、5=推論失敗、10=内部エラーとする。
+- `model load`/`model unload`/`infer`/`benchmark`はCLIプロセス内に閉じた単発操作であり、プロセス終了とともにSessionは破棄される。複数リクエストにまたがってSessionを温存するには`npu serve`のHTTP API（14.2）を使う。`unload`はprovider指定を取らないため、指定モデルバージョンに紐づく全provider Sessionを一括対象とする。詳細は[ADR-0001](adr/0001-state-ownership.md)を参照。
 - benchmarkはwarmupを統計から除外し、fallbackを禁止する。
 - benchmarkは平均、median、p95、p99、min、max、throughput、成功件数を返す。
 

@@ -35,8 +35,9 @@ MVPの非goal（2.2）は「複数プロセスまたは複数ノードでのモ�
 ### 3. `register`後、稼働中の`npu serve`への反映はプロセス再起動を要件とし、自動rescanは実装しない。
 
 - `register`（8.1）はmanifest検証とファイルシステムへのatomic copyのみを行う。ファイルシステムが正（3.1-5）であり、実行中の他プロセスのRegistryへは伝播しない。
-- 稼働中の`npu serve`に新しいモデルを認識させるには、その`npu serve`プロセスを再起動して起動時scanをやり直す。HTTP APIはmanifestの任意パスを受け取らないため（14.2の注記）rescanトリガーエンドポイントも本MVPでは提供しない。
-- ファイル監視やhot reloadによる自動rescanはMVPの非goalとして扱う（YAGNI。要求されていない機能を先回りして作らない）。将来必要になれば別Issueとして起票する。
+- 稼働中の`npu serve`に新しいモデルを認識させるには、その`npu serve`プロセスを再起動して起動時scanをやり直す。
+- 引数なしのrescanトリガーendpoint（例: `POST /v1/models/rescan`）も本MVPでは提供しない。理由は14.2の「registerはHTTPで提供しない」根拠（任意ファイルパスを受け取るため）とは無関係で、単純にYAGNIである。rescanは要求されている機能ではなく、MVPスコープ（2.1）にも記載がない。追加するとRegistry更新中のserving中request（in-flightなresolutionやload）との整合、部分失敗時の挙動など新たな設計課題を持ち込む。
+- ファイル監視やhot reloadによる自動rescanも同様にMVPの非goalとして扱う（YAGNI。要求されていない機能を先回りして作らない）。rescanトリガーendpoint・ファイル監視のいずれも将来必要になれば別Issueとして起票する。
 
 ### 4. モデル集約状態とprovider別Session状態を区別して公開する。
 
@@ -62,7 +63,9 @@ MVPの非goal（2.2）は「複数プロセスまたは複数ノードでのモ�
 ### 5. `reload`は独立したコマンド・エンドポイントとして公開しない。
 
 - Session key（10.1）はモデルSHA-256を含むため、`register`でファイルが更新されると新しいSession keyが生じる。したがって同じ`load`操作を再実行するだけで、9.2の「新SessionをLOADED後にatomic swap、旧Sessionを維持（失敗時）」が自然に成立する。
-- 変更のない`load`呼び出しは既存Session keyへの参照を返す（冪等）。変更があった`load`呼び出しは新Session keyを作成し、旧Session keyは参照されなくなった後にLRU（10.2）でevictされる。
+- 変更のない`load`呼び出しは既存Session keyへの参照を返す（冪等）。変更があった`load`呼び出しは新Session keyを作成する。
+- **新SHAへの到達経路**: name-based呼び出し（SDK `.model(name)`、HTTP `/v1/infer/{name}`、`/v1/models/{name}/{version}/load`）は、12章の推論処理フロー「Model/version resolution」が示すとおり、リクエストごとにRegistryから現在のResolved Model（現在のファイルSHA-256を含む）を解決する。これは1回限りのキャッシュされたハンドルではない。したがって`register`で新ファイルに更新した後にリクエストされた`load`/`infer`は、解決時点のRegistryが指す新SHAに基づく新Session keyへ自然に到達し、実装がSHA変更を追跡する追加のインダイレクション層を別途持つ必要はない。旧SHAのSession keyへ既に発行中だったin-flightリクエストのみ、完了まで旧Sessionを使い続ける。
+- **旧Session keyの解放**: 10.2は容量超過時のLRU evictionのみを規定しており、「参照されなくなったら即evictする」参照カウント駆動の破棄機構はSPECに存在しない。したがって新SHAへの`load`後も旧Session keyのエントリはキャッシュに残り続け、(a) 明示的な`unload <name[@version]>`（決定4のとおりそのモデルバージョンの全provider Sessionを対象とする。SHA単位の指定はCLI/HTTP文法にないため、新旧どちらのSHAのSession keyも対象に含む）、または (b) 同時load数が上限（既定4、10.2）を超えたときのLRU evictionのいずれかで解放されるまで、Sessionキャッシュの1エントリとして残る。
 - 不変条件3.2「モデルの設定またはファイルが変わっても、既存Sessionを暗黙に差し替えない」は、Session keyの構成要素にSHA-256を含めることでAPIレベルの追加操作なしに満たされる。
 
 ## 状態一貫性シーケンス
@@ -100,7 +103,7 @@ Client A (curl)     npu-server(long-lived process)     Client B (curl)
        |                       |                              |
        |                       |         POST /v1/infer/...   |
        |                       |<------------------------------|
-       |                       | 既にLOADED、single-flight不要  |
+       |                       | 直列化した一例。既にLOADED     |
        |                       |------------------------------->|
        |                       |         200 OK (warm session)  |
        | POST .../unload        |                              |
@@ -109,6 +112,8 @@ Client A (curl)     npu-server(long-lived process)     Client B (curl)
 ```
 
 Client AとBはプロセスをまたいでSessionを共有していない。両者とも同じ`npu-server`プロセスにHTTPでアクセスしているため、状態を所有するプロセスは常に1つ（`npu-server`）のままである。
+
+この図は完全に直列化された場合のみを描いている。実際にはClient Bの`/v1/infer/...`がClient Aの`load`完了より先に、まだ`LOADING`中のSessionへ到達し得る。その場合は9.2のsingle-flight規則により、Bは新たなload試行を起こさず進行中のloadに相乗りする（結果はA/Bとも同じSessionのLOADED完了を待って返る）。同様にBが`UNLOADING`中に到着した場合は`NPU021 MODEL_UNLOADING`（14.5では409）を返し、fallbackしない。単一プロセスが状態を所有するという結論はどちらのケースでも変わらないが、「常にLOADED後に到着する」という前提を図から一般化しないこと。
 
 ### C. `register`後にサーバーへ反映するには再起動が必要
 
@@ -141,9 +146,9 @@ Operator          npu-cli(process)      Filesystem/models/      npu-server(long-
 ## 影響
 
 - **後続Issueへの実装指針**: P1-06/P1-07（Session状態機械、single-flight load、LRU）はプロセスローカルな状態として実装してよい。プロセス間同期は設計不要。P3-02（CLI control plane）は`model load/unload`をCLIプロセス内Routerに対する単発操作として実装し、サーバーへのHTTPプロキシ機能は実装しない。P3-04（HTTP server）の`/v1/models/*/load`・`/unload`が唯一の永続状態操作の入口になる。
-- **ドキュメント整合**: `docs/SPEC.md`の9-15章の記述と矛盾しない（新しい契約変更ではなく、既存記述の間隙を埋める運用上の決定）。SPEC本文の更新は不要と判断した。
+- **ドキュメント整合**: `docs/SPEC.md`の9-15章の記述と矛盾しない（新しい契約変更ではなく、既存記述の間隙を埋める運用上の決定）が、8.1（register）、9.2（reload相当の挙動）、15（`unload`のprovider範囲）はSPEC本文だけを読んでもこのADRの決定が存在すること自体が分からない沈黙箇所だった。そのため`docs/PROMPT.md`の要求（決定は根拠と決定先を記録しSPECと整合させる）に従い、該当3箇所に本ADRへの短い相互参照を追記した（契約・CLI/HTTP文法そのものは変更しない）。
 - **利用者への影響**: `npu model load`はプロセス間で状態を持ち越さないため、README/CLIヘルプ文言に「単発診断コマンドであり、永続的にモデルを温める場合は`npu serve`を使うこと」を明記する必要がある（別Issueでヘルプ文言・README更新を行う）。
-- **未解決事項への影響**: 新規OQは発生しない。既存OQ-01〜08とは独立。
+- **未解決事項への影響**: 25章の番号付きOQ-01〜08はいずれも本ADRの決定事項と対象が異なるため、新規OQ番号は追加しない。ただし上記のとおりSPEC本文への相互参照は追加した。
 
 ## Non-goals（本ADRのスコープ外）
 
