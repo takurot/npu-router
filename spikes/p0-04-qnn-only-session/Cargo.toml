@@ -1,0 +1,14 @@
+[workspace]
+
+[package]
+name = "p0-04-qnn-only-session-spike"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Issue #5 (P0-04) technical spike: QNN-only ORT Session with implicit CPU EP fallback disabled, on Windows ARM64. Not production code (see README Non-goals)."
+
+# No external crates: kernel32 and the ONNX Runtime C API are called through
+# hand-declared `extern` FFI so the spike builds fully offline once the
+# pinned onnxruntime.dll/onnxruntime_providers_qnn.dll/Qnn*.dll are on disk
+# (see README.md for provenance).
+[dependencies]
